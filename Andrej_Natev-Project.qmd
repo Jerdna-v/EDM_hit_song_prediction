@@ -1,0 +1,196 @@
+---
+title: "Data Programming"
+subtitle: "Project"
+date: "`r format(Sys.time(), '%e %B %Y')`"
+author: 
+  - name: "Andrej Natev"
+    email: "89221050@student.upr.si"
+    affiliations:
+    - name: "FAMNIT, University of Primorska"
+      city: "Koper"
+      state: "Slovenia"
+      postal-code: "6000"
+format:
+  html:
+    toc: true
+    toc_float: true
+    toc-location: left
+    embed-resources: true
+    theme:
+      light: darkly
+      dark: space
+execute:
+  warning: false
+  message: false
+bibliography: bibliography.bib
+---
+
+# Introduction
+
+The music industry is a complex and rapidly evolving field, where predicting the success of a song can have significant commercial and cultural implications. Leveraging data science and machine learning, this project aims to predict hit songs using metadata from the Spotify API[@lamere_spotipy]. By analyzing various audio features, we seek to understand what makes a song popular and how different characteristics contribute to its success.
+
+## Objectives
+
+This study aims to:
+
+-   Extract track data from Spotify using Spotipy[@lamere_spotipy], the library for Python.
+-   Analyze the data and find some correlation between the features and popularity.
+-   Visualize the results that were found.
+
+# Libraries
+
+```{r}
+library(tidyverse)
+library(ggplot2)
+```
+
+# Presentation of the Data
+
+```{r}
+spotify_data <- read_csv("check (3).csv")
+
+head(spotify_data)
+
+str(spotify_data)
+```
+
+# Dataset Columns
+
+-   name: Name of the song.
+-   popularity: Popularity score of the song.
+-   id: Spotify ID of the song.
+-   danceability: Danceability score of the song.
+-   energy: Energy score of the song.
+-   key: Key of the song.
+-   loudness: Loudness of the song.
+-   mode: Mode of the song.
+-   speechiness: Speechiness score of the song.
+-   acousticness: Acousticness score of the song.
+-   instrumentalness: Instrumentalness score of the song.
+-   liveness: Liveness score of the song.
+-   valence: Valence score of the song.
+-   tempo: Tempo of the song.
+-   duration_ms: Duration of the song in milliseconds.
+-   time_signature: Time signature of the song.
+-   hit: Indicates whether the song is a hit or not.
+
+# Data Aggregation
+
+```{r}
+audio_summary <- spotify_data %>%
+  summarise(across(c(danceability, energy, tempo), list(mean = ~mean(.x, na.rm = TRUE), sd = ~sd(.x, na.rm = TRUE))))
+
+audio_summary
+```
+
+## Distribution of Songs Based on Each Feature
+
+```{r}
+create_buckets <- function(data, feature_name, n_buckets = 10) {
+  data %>%
+    mutate(bucket = ntile(.data[[feature_name]], n_buckets)) %>%
+    group_by(bucket) %>%
+    summarise(count = n()) %>%
+    ungroup() %>%
+    mutate(feature = feature_name)
+}
+
+bucket_features <- function(data, features, n_buckets = 10) {
+  bind_rows(lapply(features, function(feature) create_buckets(data, feature, n_buckets)))
+}
+
+features_to_bucket <- c("danceability", "energy", "key", "loudness", "mode", "speechiness", "acousticness", "instrumentalness", "liveness", "valence", "tempo", "duration_ms", "time_signature")
+
+bucketed_counts <- bucket_features(spotify_data, features_to_bucket)
+
+bucketed_counts
+```
+
+## Average Popularity by Feature
+
+```{r}
+create_avg_popularity_buckets <- function(data, feature_name, n_buckets = 10) {
+  data %>%
+    mutate(bucket = ntile(.data[[feature_name]], n_buckets)) %>%
+    group_by(bucket) %>%
+    summarise(avg_popularity = mean(popularity, na.rm = TRUE)) %>%
+    ungroup() %>%
+    mutate(feature = feature_name)
+}
+
+bucket_avg_popularity_features <- function(data, features, n_buckets = 10) {
+  bind_rows(lapply(features, function(feature) create_avg_popularity_buckets(data, feature, n_buckets)))
+}
+
+bucketed_avg_popularity <- bucket_avg_popularity_features(spotify_data, features_to_bucket)
+
+bucketed_avg_popularity
+```
+
+# Exploratory Data Analysis
+
+## Distribution of Song Popularity
+
+```{r}
+ggplot(spotify_data, aes(x = popularity)) +
+  geom_histogram(binwidth = 5, fill = 'blue', color = 'black') +
+  labs(title = "Distribution of Song Popularity", x = "Popularity", y = "Count")
+```
+
+The histogram represents the frequency of songs at different levels of popularity. It shows that most songs have a moderate level of popularity, with fewer songs being extremely popular or unpopular. This type of distribution, where values cluster around a central point, is known as a bell-shaped curve or normal distribution in statistics.
+
+## Loudness vs Energy
+
+```{r}
+ggplot(spotify_data, aes(x = loudness, y = energy)) +
+  geom_point(alpha = 0.5) +
+  labs(title = "Loudness vs Energy", x = "Loudness", y = "Energy")
+```
+
+The scatter plot graph titled “Loudness vs Energy” shows that as loudness increases (values becoming less negative), energy tends to increase as well. This is indicated by the clustering of data points towards the top right of the graph, suggesting a positive correlation between loudness and energy.
+
+## Unique Insights from Feature Counts Dataset
+
+```{r}
+bucketed_counts_long <- bucketed_counts %>%
+  mutate(bucket = as.factor(bucket))
+
+ggplot(bucketed_counts_long, aes(x = bucket, y = count, fill = feature)) +
+  geom_bar(stat="identity")+
+  facet_wrap(~ feature, scales = "free") +
+  labs(title = "Count of Songs in Each Bucket for Each Feature", x = "", y = "Count") +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
+```
+
+Based on the bar graphs, it can be observed that all of the musical features have a balanced distribution[@natev_second_phase] of songs across different categories. This suggests that there is a diverse range of music being produced and enjoyed, with no single attribute dominating the landscape.
+
+## Unique Insights from Average Popularity Dataset
+
+```{r}
+bucketed_avg_popularity_long <- bucketed_avg_popularity %>%
+  mutate(bucket = as.factor(bucket))
+
+ggplot(bucketed_avg_popularity_long, aes(x = bucket, y = avg_popularity, fill = feature)) +
+  geom_boxplot(ymin=0,ymax=100) +
+  facet_wrap(~ feature, scales = "free") +
+  labs(title = "Average Popularity in Each Bucket for Each Feature", x = "", y = "Average Popularity") +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
+```
+
+From the graphs, here are some key insights that could be drawn:
+
+1.  **Danceability**: Songs with higher danceability seem to have higher popularity scores, suggesting that listeners prefer songs that are more danceable.
+
+2.  **Energy**: There might be a positive correlation between a song’s energy and its popularity.
+
+3.  **Instrumentalness**: Songs with lower instrumentalness (more vocal content) tend to be more popular, which could indicate a preference for songs with prominent vocals.
+
+4.  **Loudness**: Louder songs generally have higher popularity scores, possibly reflecting a trend in listener preference for more intense and powerful music.
+
+5.  **Speechiness**: Songs with moderate speechiness appear to be more popular than those with very high or low speechiness levels.
+
+These insights suggest that listeners may favor songs that are upbeat, energetic, and have clear vocal content. However, it’s important to consider genre-specific preferences and the fact that these features alone don’t determine a song’s success. The music industry is dynamic, and trends can shift over time.
+
+# Conclusion
+
+This study[@natev_hit_song_prediction] demonstrates the potential of using Spotify metadata and exploratory data analysis to gain insights into the factors influencing song popularity. Further research using machine learning models[@natev_first_phase] could refine these insights and improve predictions of hit songs. Future work might involve incorporating additional features such as lyrical content or user engagement metrics to enhance predictive accuracy and broaden understanding within the music industry.
